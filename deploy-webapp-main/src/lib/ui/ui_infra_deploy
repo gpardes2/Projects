@@ -1,0 +1,116 @@
+#! /bin/bash
+
+set -e
+
+# Function to check if an App Service Plan exists and create it if it doesn't
+check_and_create_app_service_plan() {
+    local plan_name=$APP_SERVICE_PLAN_NAME
+    local resource_group=$RESOURCE_GROUP
+    local sku=$APP_SERVICE_PLAN_SKU
+    local number_of_workers=$APP_SERVICE_PLAN_NUMBER_OF_WORKERS
+    local is_linux=$APP_SERVICE_PLAN_IS_LINUX
+    local per_site_scaling=$APP_SERVICE_PLAN_PER_SITE_SCALING
+    local zone_redundant=$APP_SERVICE_PLAN_ZONE_REDUNDANT
+    local tags=$APP_SERVICE_PLAN_TAGS
+    local no_wait=$APP_SERVICE_PLAN_NO_WAIT
+
+    logger "INFO" "Checking if App Service Plan '$plan_name' exists in resource group '$resource_group'..."
+
+    # Check if the App Service Plan exists
+    local exists=$(az appservice plan show --name "$plan_name" --resource-group "$resource_group" --query "name" --output tsv 2>/dev/null)
+
+    if [ "$exists" == "$plan_name" ]; then
+      logger "INFO" "App Service Plan '$plan_name' already exists in resource group '$resource_group'."
+        return 0
+    fi
+
+    logger "INFO" "App Service Plan '$plan_name' does not exist. Creating it..."
+
+    # Create the App Service Plan
+    az appservice plan create \
+        --name "$plan_name" \
+        --resource-group "$resource_group" \
+        --sku "$sku" \
+        --number-of-workers "$number_of_workers" \
+        --is-linux "$is_linux" \
+        --per-site-scaling "$per_site_scaling" \
+        --zone-redundant "$zone_redundant" \
+        --tags "$tags" \
+        --no-wait "$no_wait"
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to create App Service Plan '$plan_name'."
+        exit 1
+    fi
+
+    logger "INFO" "Successfully created App Service Plan '$plan_name'."
+}
+
+# Function to check and create an Azure Web App
+check_and_create_webapp() {
+    local app_name=$WEBAPP_NAME
+    local app_service_plan=$APP_SERVICE_PLAN_NAME
+    local resource_group=$RESOURCE_GROUP
+    local basic_auth=$WEBAPP_BASIC_AUTH
+    local https_only=$WEBAPP_HTTPS_ONLY
+    local public_network_access=$WEBAPP_PUBLIC_NETWORK_ACCESS
+    local role=$WEBAPP_ROLE
+    local runtime=$WEBAPP_RUNTIME
+    local startup_file=$WEBAPP_STARTUP_FILE
+    local subnet=$WEBSERVICE_SUBNET_NAME
+    local tags=$WEBAPP_TAGS
+    local vnet=$VNET_NAME
+
+    logger "INFO" "Checking if Web App '$app_name' exists in resource group '$resource_group'..."
+
+    # Check if the Web App already exists
+    existing_webapp=$(az webapp show --name "$app_name" --resource-group "$resource_group" --query "name" --output tsv 2>/dev/null)
+
+    if [ "$existing_webapp" == "$app_name" ]; then
+        logger "INFO" "Web App '$app_name' already exists."
+    else
+        logger "INFO" "Web App '$app_name' does not exist. Creating it..."
+
+        # Create the Web App
+        az webapp create \
+            --name "$app_name" \
+            --plan "$app_service_plan" \
+            --resource-group "$resource_group" \
+            --basic-auth "$basic_auth" \
+            --https-only "$https_only" \
+            --public-network-access "$public_network_access" \
+            --role "$role" \
+            --runtime "$runtime" \
+            --scope "$scope" \
+            --startup-file "$startup_file" \
+            --subnet "$subnet" \
+            --tags "$tags" \
+            --vnet "$vnet"
+
+        if [ $? -ne 0 ]; then
+            logger "ERROR" "Failed to create Web App '$app_name'."
+            exit 1
+        fi
+
+        logger "INFO" "Successfully created Web App '$app_name'."
+    fi
+}
+
+create_webapp_deployment_slot() {
+    local resource_group=$RESOURCE_GROUP_NAME
+    local webapp_name=$WEBAPP_NAME
+    local slot_name=$1
+
+    logger "INFO" "Creating deployment slot: $slot_name for WebApp: $webapp_name in Resource Group: $resource_group..."
+
+    az webapp deployment slot create --resource-group "$resource_group" --name "$webapp_name" --slot "$slot_name"
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to create deployment slot: $slot_name"
+        return 1
+    fi
+
+    logger "INFO" "Deployment slot $slot_name created successfully."
+    return 0
+}
+

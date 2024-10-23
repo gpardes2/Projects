@@ -1,0 +1,95 @@
+#! /bin/bash
+
+set -e
+
+# Function to login to Azure
+az_login() {
+    # Check if the required environment variables are set
+    # Jenkins or Gitlab Secret managers can be used to securely store the below parameters in vault
+    # CLIENT_ID, CLIENT_SECRET, TENANT_ID, SUBSCRIPTION_ID can be loaded at runtime in runner's environment
+
+    if [ -z "$CLIENT_ID" ]; then
+        logger "ERROR" "Missing required environment variable: CLIENT_ID for Azure login."
+        return 1
+    fi
+    if [ -z "$CLIENT_SECRET" ]; then
+        logger "ERROR" "Missing required environment variable: CLIENT_SECRET for Azure login."
+        return 1
+    fi
+    if [ -z "$TENANT_ID" ]; then
+        logger "ERROR" "Missing required environment variable: TENANT_ID for Azure login."
+        return 1
+    fi
+    if [ -z "$SUBSCRIPTION_ID" ]; then
+        logger "ERROR" "Missing required environment variable: SUBSCRIPTION_ID for Azure login."
+        return 1
+    fi
+
+    # Attempt to login using service principal
+    if ! az login --service-principal -u $CLIENT_ID -p $CLIENT_SECRET --tenant $TENANT_ID 2>&1; then
+        logger "ERROR" "Failed to login to Azure with service principal."
+        return 1
+    fi
+
+    # Attempt to set the subscription
+    if ! az account set --subscription $SUBSCRIPTION_ID 2>&1; then
+        logger "ERROR" "Failed to set Azure subscription."
+        return 1
+    fi
+
+    logger "INFO" "Successfully logged in and set the subscription."
+    return 0
+}
+
+# Install Azure CLI
+install_azure_cli() {
+    logger "INFO" "Installing Azure CLI..."
+    curl -sL https://aka.ms/InstallAzureCLI | bash
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to install Azure CLI"
+        exit 1
+    fi
+}
+
+# Check and install Azure CLI
+check_az_cli() {
+    logger "INFO" "Checking if Azure CLI is installed..."
+    if ! command -v az &> /dev/null; then
+        install_azure_cli
+    fi
+
+    az version
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to check Azure CLI version"
+        exit 1
+    fi
+    logger "INFO" "Azure CLI is installed."
+
+    # Enabling dynamic install of extensions without prompt
+    az config set extension.use_dynamic_install=yes_without_prompt
+}
+
+# Function to check and create a resource group if it doesn't already exist
+check_and_create_resource_group() {
+    local RESOURCE_GROUP_NAME=$1
+
+    if [ -z "$RESOURCE_GROUP_NAME" ] || [ -z "$LOCATION" ]; then
+        logger "ERROR" "Resource group name and location are required"
+        exit 1
+    fi
+
+    # Check if the resource group already exists
+    if az group show --name "$RESOURCE_GROUP_NAME" > /dev/null 2>&1; then
+        logger "INFO" "Resource group '$RESOURCE_GROUP_NAME' already exists"
+    else
+        logger "INFO" "Creating resource group '$RESOURCE_GROUP_NAME' in location '$LOCATION'"
+        if az group create --name "$RESOURCE_GROUP_NAME" --location "$LOCATION" > /dev/null 2>&1; then
+            logger "INFO" "Resource group '$RESOURCE_GROUP_NAME' created successfully"
+        else
+            logger "ERROR" "Failed to create resource group '$RESOURCE_GROUP_NAME'"
+            exit 1
+        fi
+    fi
+}
+

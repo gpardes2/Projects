@@ -1,0 +1,37 @@
+#! /bin/bash
+
+set -e
+source src/lib/helper
+
+# APP_ENVIRONMENT should be passed either from environment variable or pipeline parameter
+if [ -z $APP_ENVIRONMENT] && [ -z $ENV ]; then 
+    logger "ERROR" "APP_ENVIRONMENT or ENV must be defined"
+    exit 1
+fi
+
+if [ -z $ENV ]; then ENV=$APP_ENVIRONMENT; fi
+
+ENV_CONFIG_PATH="config/environments/${ENV}"
+SECRETS_FILE="${ENV_CONFIG_PATH}/secrets.enc.yaml"
+
+ENV_PROPERTIES="${ENV_CONFIG_PATH}/${ENV}.properties"
+UI_PROPERTIES="${ENV_CONFIG_PATH}/${ENV}.ui.properties"
+WEBSERVICE_PROPERTIES="${ENV_CONFIG_PATH}/${ENV}.webservice.properties"
+
+source ${ENV_PROPERTIES}
+source ${UI_PROPERTIES}
+source ${WEBSERVICE_PROPERTIES}
+
+source src/lib/azure/az_lib
+source src/lib/azure/keyvault
+
+check_az_cli
+
+logger "INFO" "Authenticating to Azure"
+az_login
+
+logger "INFO" "Reading secrets from local encrypted file"
+fetch_secrets $SECRETS_FILE
+
+logger "INFO" "Loading secrets from Azure Kevvault"
+load_secrets_from_keyvault

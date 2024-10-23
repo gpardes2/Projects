@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e
+
+# Define colors for terminal logging
+GREEN="\033[0;32m"
+BLUE="\033[0;34m"
+RED="\033[0;31m"
+NC="\033[0m" # No Color
+
+# Define log directory and file
+LOG_DIR=~/deploy_webapps/logs
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG_FILE="${LOG_DIR}/deploy_${TIMESTAMP}.log"
+
+# Create log directory if it doesn't exist
+mkdir -p "$LOG_DIR"
+
+# Function to handle logging
+logger() {
+    local LEVEL=$1
+    local MESSAGE=$2
+    local DATE_STRING
+
+    DATE_STRING=$(date +'%Y-%m-%d %H:%M:%S')
+    
+    # Determine log level color and format
+    case "$LEVEL" in
+        INFO)
+            local COLOR=$GREEN
+            ;;
+        DEBUG)
+            if [ "$DEBUG_ENABLED" == "true" ]; then
+                local COLOR=$BLUE
+                MESSAGE="($DATE_STRING) $MESSAGE"
+            else
+                return 0
+            fi
+            ;;
+        ERROR)
+            local COLOR=$RED
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    # Format log entry with timestamp
+    local LOG_ENTRY="[$DATE_STRING] $LEVEL: $MESSAGE"
+
+    # Output to terminal with color if applicable
+    if [ -n "$COLOR" ]; then
+        echo -e "${COLOR}${LOG_ENTRY}${NC}"
+    fi
+
+    # Output to log file without color
+    echo "$LOG_ENTRY" >> "$LOG_FILE"
+}
+
+# Example usage
+# logger "INFO" "Script started"
+# logger "DEBUG" "This is a debug message"
+# logger "ERROR" "This is an error message"

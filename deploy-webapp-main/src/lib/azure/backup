@@ -1,0 +1,58 @@
+#! /bin/bash
+
+set -e
+
+# Function to enable and configure backup for Web App (UI)
+manual_backup_webapp() {
+    local resource_group=$RESOURCE_GROUP
+    local webapp_name=$WEBAPP_NAME
+    local backup_name=$WEBAPP_BACKUP_NAME
+    local storage_container_url=$STORAGE_CONTAINER_URL
+
+    logger "INFO" "Creating backup for Web App (UI): $webapp_name in Resource Group: $resource_group..."
+
+    az webapp config backup create --resource-group "$resource_group" \
+        --webapp-name "$webapp_name" \
+        --backup-name "$backup_name" \
+        --container-url "$storage_container_url"
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to create backup for Web App (UI): $webapp_name"
+        return 1
+    fi
+
+    # Scheduling backups (Azure Backup policies or Azure Automation should handle this)
+    logger "INFO" "Backup for Web App (UI): $webapp_name is triggered."
+    return 0
+}
+
+# Function to Setup automated backups for WebApp backup configuration
+setup_auto_backup_webapp() {
+    local resource_group=$RESOURCE_GROUP
+    local webapp_name=$WEBAPP_NAME
+    local backup_name=$WEBAPP_BACKUP_NAME
+    local container_url=$WEBAPP_BACKUP_STORAGE_CONTAINER_URL
+    local frequency=$WEBAPP_BACKUP_FREQUENCY
+    local retain_one=$WEBAPP_BACKUP_RETAIN_ONE
+    local retention=$WEBAPP_BACKUP_RETENTION 
+    local slot=$DEPLOYMENT_SLOT 
+
+    logger "INFO" "Updating backup configuration for Web App: $webapp_name in Resource Group: $resource_group..."
+
+    az webapp config backup update --resource-group "$resource_group" \
+        --webapp-name "$webapp_name" \
+        --backup-name "$backup_name" \
+        --container-url "$container_url" \
+        --frequency "$frequency" \
+        --retain-one "$retain_one" \
+        --retention "$retention" \
+        --slot "$slot"
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to update backup configuration for Web App: $webapp_name"
+        return 1
+    fi
+
+    logger "INFO" "Backup configuration updated successfully for Web App: $webapp_name."
+    return 0
+}

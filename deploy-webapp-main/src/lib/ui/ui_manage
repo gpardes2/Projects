@@ -1,0 +1,187 @@
+#! /bin/bash
+# This functions here should handle management tasks such as 
+# scaling, monitoring, and updating configurations.
+
+set -e
+
+# Function to update an Azure App Service plan
+update_app_service_plan() {
+
+    local plan_name=$APP_SERVICE_PLAN_NAME
+    local resource_group="$RESOURCE_GROUP"
+    local sku="$APP_SERVICE_PLAN_SKU"
+    local add="$APP_SERVICE_PLAN_ADD"
+    local elastic_scale="$APP_SERVICE_PLAN_ELASTIC_SCALE"
+    local force_string="$APP_SERVICE_PLAN_FORCE_STRING"
+    local max_elastic_worker_count="$APP_SERVICE_PLAN_MAX_ELASTIC_WORKER_COUNT"
+    local no_wait="$APP_SERVICE_PLAN_NO_WAIT"
+    local number_of_workers="$APP_SERVICE_PLAN_NUMBER_OF_WORKERS"
+    local remove="$APP_SERVICE_PLAN_REMOVE"
+    local set_param="$APP_SERVICE_PLAN_SET"
+
+    # Log the start of the update process
+    logger "INFO" "Updating App Service Plan '$plan_name' in resource group '$resource_group'."
+
+    # Start building the az command
+    az_command="az appservice plan update --name $plan_name --resource-group $resource_group"
+
+    [ -n "$sku" ] && az_command+=" --sku $sku"
+    [ -n "$add" ] && az_command+=" --add $add"
+    [ -n "$elastic_scale" ] && az_command+=" --elastic-scale $elastic_scale"
+    [ -n "$force_string" ] && az_command+=" --force-string $force_string"
+    [ -n "$max_elastic_worker_count" ] && az_command+=" --max-elastic-worker-count $max_elastic_worker_count"
+    [ -n "$no_wait" ] && az_command+=" --no-wait"
+    [ -n "$number_of_workers" ] && az_command+=" --number-of-workers $number_of_workers"
+    [ -n "$remove" ] && az_command+=" --remove $remove"
+    [ -n "$set_param" ] && az_command+=" --set $set_param"
+
+    # Execute the command and handle errors
+    if ! eval "$az_command"; then
+        logger "ERROR" "Failed to update App Service Plan '$plan_name'."
+        return 1
+    fi
+
+    # Log successful update
+    logger "INFO" "Successfully updated App Service Plan '$plan_name'."
+    return 0
+}
+
+# Function to update an Azure Web App
+update_webapp() {
+    local resource_group=$RESOURCE_GROUP
+    local app_name=$WEBAPP_NAME
+
+    # Initialize az command
+    az_command="az webapp update --name $app_name --resource-group $resource_group"
+
+    # Optional parameters
+    [ -n "$WEBAPP_BASIC_AUTH" ] && az_command+=" --basic-auth $APP_BASIC_AUTH"
+    [ -n "$WEBAPP_CLIENT_AFFINITY_ENABLED" ] && az_command+=" --client-affinity-enabled $APP_CLIENT_AFFINITY_ENABLED"
+    [ -n "$WEBAPP_FORCE_DNS_REGISTRATION" ] && az_command+=" --force-dns-registration $APP_FORCE_DNS_REGISTRATION"
+    [ -n "$WEBAPP_HTTPS_ONLY" ] && az_command+=" --https-only $APP_HTTPS_ONLY"
+    [ -n "$WEBAPP_MINIMUM_ELASTIC_INSTANCE_COUNT" ] && az_command+=" --minimum-elastic-instance-count $APP_MINIMUM_ELASTIC_INSTANCE_COUNT"
+    [ -n "$WEBAPP_PREWARMED_INSTANCE_COUNT" ] && az_command+=" --prewarmed-instance-count $APP_PREWARMED_INSTANCE_COUNT"
+    [ -n "$WEBAPP_SKIP_CUSTOM_DOMAIN_VERIFICATION" ] && az_command+=" --skip-custom-domain-verification $APP_SKIP_CUSTOM_DOMAIN_VERIFICATION"
+    [ -n "$WEBAPP_SKIP_DNS_REGISTRATION" ] && az_command+=" --skip-dns-registration $APP_SKIP_DNS_REGISTRATION"
+    [ -n "$WEBAPP_TTL_IN_SECONDS" ] && az_command+=" --ttl-in-seconds $APP_TTL_IN_SECONDS"
+    [ -n "$WEBAPP_SLOT" ] && az_command+=" --slot $APP_SLOT"
+
+    # Execute the command
+    logger "DEBUG" "Running command: $az_command"
+    eval "$az_command"
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to update the Web App '$app_name'."
+        exit 1
+    fi
+
+    logger "INFO" "Successfully updated the Web App '$app_name'."
+}
+
+# Function to restart an Azure WebApp
+restart_webapp() {
+    local resource_group=$RESOURCE_GROUP
+    local webapp_name=$WEBAPP_NAME
+
+    logger "INFO" "Restarting WebApp: $webapp_name in Resource Group: $resource_group..."
+
+    az webapp restart --name "$webapp_name" --resource-group "$resource_group"
+    
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to restart WebApp: $webapp_name in Resource Group: $resource_group"
+        return 1
+    fi
+
+    logger "INFO" "WebApp: $webapp_name successfully restarted in Resource Group: $resource_group"
+    return 0
+}
+
+# Function to scale an Azure WebApp
+scale_webapp() {
+    local resource_group=$RESOURCE_GROUP
+    local webapp_name=$WEBAPP_NAME
+    local instance_count=$WEBAPP_INSTANCE_COUNT
+    local slot=$WEBAPP_SLOT
+
+    logger "INFO" "Scaling WebApp: $webapp_name in Resource Group: $resource_group to $instance_count instances..."
+
+    if [ -z "$slot" ]; then
+        az webapp scale --resource-group "$resource_group" --name "$webapp_name" --instance-count "$instance_count"
+    else
+        az webapp scale --resource-group "$resource_group" --name "$webapp_name" --instance-count "$instance_count" --slot "$slot"
+    fi
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to scale WebApp: $webapp_name in Resource Group: $resource_group"
+        return 1
+    fi
+
+    logger "INFO" "Successfully scaled WebApp: $webapp_name in Resource Group: $resource_group to $instance_count instances"
+    return 0
+}
+
+# Function to start an Azure WebApp
+start_webapp() {
+    local resource_group=$RESOURCE_GROUP
+    local webapp_name=$WEBAPP_NAME
+    local slot=$WEBAPP_SLOT
+
+    logger "INFO" "Starting WebApp: $webapp_name in Resource Group: $resource_group..."
+
+    if [ -z "$slot" ]; then
+        az webapp start --resource-group "$resource_group" --name "$webapp_name"
+    else
+        az webapp start --resource-group "$resource_group" --name "$webapp_name" --slot "$slot"
+    fi
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to start WebApp: $webapp_name in Resource Group: $resource_group"
+        return 1
+    fi
+
+    logger "INFO" "Successfully started WebApp: $webapp_name in Resource Group: $resource_group"
+    return 0
+}
+
+# Function to stop an Azure WebApp
+stop_webapp() {
+    local resource_group=$RESOURCE_GROUP
+    local webapp_name=$WEBAPP_NAME
+    local slot=$WEBAPP_SLOT
+
+    logger "INFO" "Stopping WebApp: $webapp_name in Resource Group: $resource_group..."
+
+    if [ -z "$slot" ]; then
+        az webapp stop --resource-group "$resource_group" --name "$webapp_name"
+    else
+        az webapp stop --resource-group "$resource_group" --name "$webapp_name" --slot "$slot"
+    fi
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to stop WebApp: $webapp_name in Resource Group: $resource_group"
+        return 1
+    fi
+
+    logger "INFO" "Successfully stopped WebApp: $webapp_name in Resource Group: $resource_group"
+    return 0
+}
+
+# Function to Swap Slots
+swap_slots() {
+    local resource_group=$RESOURCE_GROUP
+    local webapp_name=$WEBAPP_NAME
+    local source_slot="$1"
+    local target_slot="$2"
+
+    logger "INFO" "Swapping slots: $source_slot with $target_slot for WebApp: $webapp_name in Resource Group: $resource_group..."
+
+    az webapp deployment slot swap --resource-group "$resource_group" --name "$webapp_name" --slot "$source_slot" --target-slot "$target_slot"
+
+    if [ $? -ne 0 ]; then
+        logger "ERROR" "Failed to swap slots: $source_slot and $target_slot"
+        return 1
+    fi
+
+    logger "INFO" "Successfully swapped slots: $source_slot with $target_slot."
+    return 0
+}
+
